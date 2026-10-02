@@ -3,8 +3,8 @@
 실행 :  python src/train.py          (data/cells_raw.pkl 필요 → load_data.py 먼저 실행)
 출력 :  results/model_performance.csv  (과제 리포팅 포맷, Batch 3 포함)
         results/model_selection_20seeds.csv, results/residual_by_structure.csv, results/top_error_cells.csv,
-        results/sensitivity.csv, results/dq_voltage_window.csv, results/offset_calibration.csv,
-        results/test_predictions.csv
+        results/sensitivity.csv, results/dq_voltage_window.csv, results/paper_split_reproduction.csv,
+        results/offset_calibration.csv, results/test_predictions.csv
 
 설계 (DAY 1 모델링 전략)
 - 타깃 log10(cycle_life), 평가 지표는 역변환 후 MAPE (%)
@@ -161,6 +161,27 @@ def dq_window_check(cells, F, windows=(('2.0~3.5V (기본, 전체)', 3.5), ('2.0
     return pd.DataFrame(rows).round(2)
 
 
+def paper_split_check(F, n_random=50, seed=0):
+    """(검증) Gap(Target-Test) 분해 : 원논문처럼 학습/테스트를 배치 구분 없이 섞으면 같은 모델이 몇 %가 나오는가.
+    원논문 학습·1차 테스트는 2017-05-12 + 2017-06-30 배치를 섞어 '각각 수명 범위를 고르게 덮도록' 나눴다.
+    여기서는 b1 + b2(36 + 39셀)를 수명 순으로 정렬해 번갈아 배정(2가지) + 무작위 41셀 학습(50회)으로 재현한다.
+    셋 A · Linear(원논문 variance 모델과 같은 형태). 과제 성능표와 분리해서 보고한다."""
+    P = F[F.batch.isin(['b1', 'b2'])].sort_values('life').reset_index(drop=True)
+    B3 = F[F.batch == 'b3']; feats = FEATURE_SETS['A']; rows = []
+    def ev(tr, te, name):
+        m = tune(tr.reset_index(drop=True), feats, 'Linear')
+        te2 = te[te.batch == 'b2']
+        return dict(split=name, n_train=len(tr), n_test=len(te), test_mixed=mape(te.log_life, m.predict(te[feats])),
+                    test_b2_cells=mape(te2.log_life, m.predict(te2[feats])), test_b3=mape(B3.log_life, m.predict(B3[feats])))
+    for off in (0, 1):
+        rows.append(ev(P.iloc[off::2], P.iloc[1 - off::2], f'수명 순 번갈아 배정 {off}'))
+    rng = np.random.default_rng(seed)
+    rr = [ev(P.iloc[i[:41]], P.iloc[i[41:]], 'r') for i in (rng.permutation(len(P)) for _ in range(n_random))]
+    rows.append(dict(split=f'무작위 41셀 학습 x{n_random} 평균', n_train=41, n_test=len(P) - 41,
+                     **{k: np.mean([r[k] for r in rr]) for k in ('test_mixed', 'test_b2_cells', 'test_b3')}))
+    return pd.DataFrame(rows).round(2)
+
+
 def main():
     RESULTS.mkdir(exist_ok=True)
     cells, _ = get_cells()
@@ -223,6 +244,11 @@ def main():
     dqw = dq_window_check(cells, F)
     dqw.to_csv(RESULTS / 'dq_voltage_window.csv', index=False, encoding='utf-8-sig')
     print(dqw.to_string(index=False))
+
+    # 5-3) Gap(Target-Test) 분해 : 원논문식 혼합 분할 재현
+    pap = paper_split_check(F)
+    pap.to_csv(RESULTS / 'paper_split_reproduction.csv', index=False, encoding='utf-8-sig')
+    print(pap.to_string(index=False))
 
     # 6) (추가) 배치별 소량 재보정
     cal = pd.concat([offset_calibration(d).assign(batch=b) for b, d in (('b2', B2), ('b3', B3))]).round(2)

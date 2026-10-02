@@ -25,6 +25,6 @@ MIT-Stanford Battery Dataset (Severson et al., *Nature Energy* 2019) — Kaggle 
 ## 정제 규칙
 - 인덱스 : summary·Qdlin 배열 j = cycle − 1 (cycle 10 = j9, cycle 100 = j99)
 - 제거 : 다른 실험 프로토콜(b2 VarCharge 4, SLOWCYCLE 4), EOL(0.88Ah) 미도달 = 수명 미관측(b1 10, b3 2)
-- b1 c0~c4 : barcode 대조 결과 b2에 이어진 셀이 없어 원논문 보정 수명을 검증할 수 없음 → 제외, 민감도 분석에만 사용
+- b1 c0~c4 : 원논문 코드는 2017-06-30 배치로 이어진 실험이라며 수명을 보정했지만, 그 배치는 이번 데이터에 없고 b2(2018-02-20)와 barcode 대조 결과 이어진 셀도 없어 검증할 수 없음 → 제외, 민감도 분석에만 사용
 - b3 원논문 노이즈 채널(c2, c37, c42, c43) : 스파이크 점검(30mAh 초과)에 걸리지 않아 유지, 제거한 경우는 민감도 분석
 - 단발성 QD 스파이크는 median filter(k=5), IR = 0은 결측
