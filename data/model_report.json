@@ -1,0 +1,386 @@
+{
+ "selected": {
+  "set": "A",
+  "features": [
+   "dQ_logvar"
+  ],
+  "model": "Linear",
+  "params": "{}"
+ },
+ "report": {
+  "Train (b1 CV)": {
+   "MAPE % (20 seed 평균)": 8.83,
+   "표준편차": 0.81,
+   "seed 0": 9.31
+  },
+  "Valid (b1 hold-out)": {
+   "MAPE % (20 seed 평균)": 9.63,
+   "표준편차": 2.55,
+   "seed 0": 7.8
+  },
+  "Test (b2)": {
+   "MAPE % (20 seed 평균)": 28.56,
+   "표준편차": NaN,
+   "seed 0": NaN
+  }
+ },
+ "gap": {
+  "Gap (Train−Valid)": 0.8,
+  "Gap (Valid−Test)": 18.93,
+  "Gap (Target−Test)": 19.46
+ },
+ "test_b3": 12.814065365319655,
+ "residual": [
+  {
+   "batch": "b2",
+   "group": "normal",
+   "n": 30,
+   "MAPE": 31.9,
+   "bias": 31.9,
+   "life_median": 451.0
+  },
+  {
+   "batch": "b2",
+   "group": "newstructure",
+   "n": 9,
+   "MAPE": 17.5,
+   "bias": 15.7,
+   "life_median": 904.0
+  },
+  {
+   "batch": "b3",
+   "group": "newstructure",
+   "n": 44,
+   "MAPE": 12.8,
+   "bias": 1.6,
+   "life_median": 1005.5
+  }
+ ],
+ "hypothesis_setC": [
+  {
+   "set": "A",
+   "model": "Linear",
+   "n_feat": 1,
+   "score_b1": 9.23,
+   "test_b2": 28.56,
+   "test_b3": 12.81
+  },
+  {
+   "set": "B",
+   "model": "Lasso",
+   "n_feat": 2,
+   "score_b1": 9.58,
+   "test_b2": 32.07,
+   "test_b3": 12.4
+  },
+  {
+   "set": "C",
+   "model": "Linear",
+   "n_feat": 7,
+   "score_b1": 6.4,
+   "test_b2": 101.96,
+   "test_b3": 58.4
+  }
+ ],
+ "sensitivity": [
+  {
+   "index": "기본 (c0~c4 제외)",
+   "train cells": 36,
+   "life range": "534~1074",
+   "Test (b2)": 28.56,
+   "Test (b3)": 12.81
+  },
+  {
+   "index": "민감도 (c0~c4 보정 수명 포함)",
+   "train cells": 41,
+   "life range": "534~2237",
+   "Test (b2)": 26.17,
+   "Test (b3)": 15.26
+  }
+ ],
+ "gpr_coverage": {
+  "b2": {
+   "coverage_95": 41.02564102564102,
+   "mean_interval_x": 1.2576384043272786
+  },
+  "b3": {
+   "coverage_95": 84.0909090909091,
+   "mean_interval_x": 1.2865003389063203
+  }
+ },
+ "summary": [
+  {
+   "set": "A",
+   "model": "ElasticNet",
+   "n_feat": 1,
+   "cv_mean": 8.8,
+   "cv_std": 0.76,
+   "valid_mean": 9.75,
+   "valid_std": 2.41,
+   "score_mean": 9.28,
+   "score_std": 0.89,
+   "cv_seed0": 9.31,
+   "valid_seed0": 7.8
+  },
+  {
+   "set": "A",
+   "model": "GPR",
+   "n_feat": 1,
+   "cv_mean": 10.31,
+   "cv_std": 1.51,
+   "valid_mean": 10.89,
+   "valid_std": 3.05,
+   "score_mean": 10.6,
+   "score_std": 1.4,
+   "cv_seed0": 12.55,
+   "valid_seed0": 8.21
+  },
+  {
+   "set": "A",
+   "model": "Lasso",
+   "n_feat": 1,
+   "cv_mean": 8.8,
+   "cv_std": 0.77,
+   "valid_mean": 9.77,
+   "valid_std": 2.36,
+   "score_mean": 9.29,
+   "score_std": 0.86,
+   "cv_seed0": 9.31,
+   "valid_seed0": 7.81
+  },
+  {
+   "set": "A",
+   "model": "Linear",
+   "n_feat": 1,
+   "cv_mean": 8.83,
+   "cv_std": 0.81,
+   "valid_mean": 9.63,
+   "valid_std": 2.55,
+   "score_mean": 9.23,
+   "score_std": 0.93,
+   "cv_seed0": 9.31,
+   "valid_seed0": 7.8
+  },
+  {
+   "set": "A",
+   "model": "RF",
+   "n_feat": 1,
+   "cv_mean": 9.52,
+   "cv_std": 0.91,
+   "valid_mean": 10.9,
+   "valid_std": 3.32,
+   "score_mean": 10.21,
+   "score_std": 1.39,
+   "cv_seed0": 10.23,
+   "valid_seed0": 6.47
+  },
+  {
+   "set": "A",
+   "model": "Ridge",
+   "n_feat": 1,
+   "cv_mean": 8.79,
+   "cv_std": 0.76,
+   "valid_mean": 9.78,
+   "valid_std": 2.38,
+   "score_mean": 9.29,
+   "score_std": 0.88,
+   "cv_seed0": 9.31,
+   "valid_seed0": 7.8
+  },
+  {
+   "set": "A",
+   "model": "SVR",
+   "n_feat": 1,
+   "cv_mean": 9.14,
+   "cv_std": 1.02,
+   "valid_mean": 10.86,
+   "valid_std": 2.64,
+   "score_mean": 10.0,
+   "score_std": 0.96,
+   "cv_seed0": 9.91,
+   "valid_seed0": 8.52
+  },
+  {
+   "set": "B",
+   "model": "ElasticNet",
+   "n_feat": 2,
+   "cv_mean": 8.87,
+   "cv_std": 0.84,
+   "valid_mean": 10.35,
+   "valid_std": 3.2,
+   "score_mean": 9.61,
+   "score_std": 1.39,
+   "cv_seed0": 9.83,
+   "valid_seed0": 8.91
+  },
+  {
+   "set": "B",
+   "model": "GPR",
+   "n_feat": 2,
+   "cv_mean": 11.94,
+   "cv_std": 1.17,
+   "valid_mean": 13.33,
+   "valid_std": 4.86,
+   "score_mean": 12.63,
+   "score_std": 2.09,
+   "cv_seed0": 12.69,
+   "valid_seed0": 9.3
+  },
+  {
+   "set": "B",
+   "model": "Lasso",
+   "n_feat": 2,
+   "cv_mean": 8.94,
+   "cv_std": 0.84,
+   "valid_mean": 10.22,
+   "valid_std": 3.28,
+   "score_mean": 9.58,
+   "score_std": 1.39,
+   "cv_seed0": 9.84,
+   "valid_seed0": 8.95
+  },
+  {
+   "set": "B",
+   "model": "Linear",
+   "n_feat": 2,
+   "cv_mean": 9.23,
+   "cv_std": 0.84,
+   "valid_mean": 10.34,
+   "valid_std": 3.54,
+   "score_mean": 9.79,
+   "score_std": 1.49,
+   "cv_seed0": 10.16,
+   "valid_seed0": 8.5
+  },
+  {
+   "set": "B",
+   "model": "RF",
+   "n_feat": 2,
+   "cv_mean": 10.19,
+   "cv_std": 1.09,
+   "valid_mean": 11.64,
+   "valid_std": 2.94,
+   "score_mean": 10.91,
+   "score_std": 1.23,
+   "cv_seed0": 11.7,
+   "valid_seed0": 6.8
+  },
+  {
+   "set": "B",
+   "model": "Ridge",
+   "n_feat": 2,
+   "cv_mean": 9.18,
+   "cv_std": 0.83,
+   "valid_mean": 10.68,
+   "valid_std": 3.41,
+   "score_mean": 9.93,
+   "score_std": 1.44,
+   "cv_seed0": 10.16,
+   "valid_seed0": 8.5
+  },
+  {
+   "set": "B",
+   "model": "SVR",
+   "n_feat": 2,
+   "cv_mean": 11.17,
+   "cv_std": 1.1,
+   "valid_mean": 13.3,
+   "valid_std": 4.29,
+   "score_mean": 12.24,
+   "score_std": 1.8,
+   "cv_seed0": 11.72,
+   "valid_seed0": 9.02
+  },
+  {
+   "set": "C",
+   "model": "ElasticNet",
+   "n_feat": 7,
+   "cv_mean": 6.1,
+   "cv_std": 1.07,
+   "valid_mean": 7.4,
+   "valid_std": 4.17,
+   "score_mean": 6.75,
+   "score_std": 1.87,
+   "cv_seed0": 7.85,
+   "valid_seed0": 3.72
+  },
+  {
+   "set": "C",
+   "model": "GPR",
+   "n_feat": 7,
+   "cv_mean": 8.61,
+   "cv_std": 1.95,
+   "valid_mean": 7.71,
+   "valid_std": 3.52,
+   "score_mean": 8.16,
+   "score_std": 1.45,
+   "cv_seed0": 10.52,
+   "valid_seed0": 5.83
+  },
+  {
+   "set": "C",
+   "model": "Lasso",
+   "n_feat": 7,
+   "cv_mean": 6.41,
+   "cv_std": 1.08,
+   "valid_mean": 7.6,
+   "valid_std": 4.56,
+   "score_mean": 7.0,
+   "score_std": 2.0,
+   "cv_seed0": 8.13,
+   "valid_seed0": 3.5
+  },
+  {
+   "set": "C",
+   "model": "Linear",
+   "n_feat": 7,
+   "cv_mean": 6.08,
+   "cv_std": 1.07,
+   "valid_mean": 6.71,
+   "valid_std": 2.69,
+   "score_mean": 6.4,
+   "score_std": 1.26,
+   "cv_seed0": 7.77,
+   "valid_seed0": 4.0
+  },
+  {
+   "set": "C",
+   "model": "RF",
+   "n_feat": 7,
+   "cv_mean": 10.27,
+   "cv_std": 0.9,
+   "valid_mean": 11.41,
+   "valid_std": 3.26,
+   "score_mean": 10.84,
+   "score_std": 1.49,
+   "cv_seed0": 10.97,
+   "valid_seed0": 6.25
+  },
+  {
+   "set": "C",
+   "model": "Ridge",
+   "n_feat": 7,
+   "cv_mean": 6.04,
+   "cv_std": 1.08,
+   "valid_mean": 7.35,
+   "valid_std": 4.21,
+   "score_mean": 6.7,
+   "score_std": 1.94,
+   "cv_seed0": 7.8,
+   "valid_seed0": 6.94
+  },
+  {
+   "set": "C",
+   "model": "SVR",
+   "n_feat": 7,
+   "cv_mean": 9.41,
+   "cv_std": 0.96,
+   "valid_mean": 9.9,
+   "valid_std": 3.4,
+   "score_mean": 9.65,
+   "score_std": 1.6,
+   "cv_seed0": 10.88,
+   "valid_seed0": 6.58
+  }
+ ]
+}

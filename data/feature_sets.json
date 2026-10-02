@@ -1,0 +1,18 @@
+{
+ "A": [
+  "dQ_logvar"
+ ],
+ "B": [
+  "dQ_logvar",
+  "QD_slope_91_100"
+ ],
+ "C": [
+  "dQ_logvar",
+  "QD_slope_91_100",
+  "dQ_logmin",
+  "dQ_mean",
+  "QD_2",
+  "QD_slope_2_100",
+  "QD_icpt_2_100"
+ ]
+}
