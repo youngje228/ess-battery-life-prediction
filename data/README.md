@@ -18,7 +18,7 @@ MIT-Stanford Battery Dataset (Severson et al., *Nature Energy* 2019) — Kaggle 
 | `data_cleaning_log.csv` | 01_EDA | 셀별 제거 여부와 사유 |
 | `features_cycle100.csv` | 01_EDA, `src/features.py` | 셀당 1행, cycle 2\~100 피처 + 수명 |
 | `features_sensitivity_b1c0-4.csv` | 01_EDA | b1 c0\~c4 (원논문 보정 수명) 민감도 분석용 |
-| `eda_stats.json` | 01_EDA | 장표에 쓴 EDA 수치 |
+| `eda_stats.json` | 01_EDA | EDA 요약 수치 |
 | `model_input.csv`, `feature_sets.json`, `splits.json` | 02_feature_engineering | 모델 입력, 피처셋 A/B/C, 정책 단위 분할 20개 |
 | `model_runs_20seeds.csv`, `model_report.json`, `test_predictions.csv` | 03_modeling | 420회 학습 결과, 최종 리포트, 테스트 예측 |
 
