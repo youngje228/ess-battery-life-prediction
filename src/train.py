@@ -3,7 +3,8 @@
 실행 :  python src/train.py          (data/cells_raw.pkl 필요 → load_data.py 먼저 실행)
 출력 :  results/model_performance.csv  (과제 리포팅 포맷, Batch 3 포함)
         results/model_selection_20seeds.csv, results/residual_by_structure.csv, results/top_error_cells.csv,
-        results/sensitivity.csv, results/offset_calibration.csv, results/test_predictions.csv
+        results/sensitivity.csv, results/dq_voltage_window.csv, results/offset_calibration.csv,
+        results/test_predictions.csv
 
 설계 (DAY 1 모델링 전략)
 - 타깃 log10(cycle_life), 평가 지표는 역변환 후 MAPE (%)
@@ -141,6 +142,25 @@ def offset_calibration(d, ks=(1, 3, 5, 10), n_draw=500, seed=0):
     return pd.DataFrame(rows)
 
 
+def dq_window_check(cells, F, windows=(('2.0~3.5V (기본, 전체)', 3.5), ('2.0~3.1V', 3.1), ('2.0~3.0V', 3.0))):
+    """(검증) Batch 3 경고 'Qdlin 시작점이 배치별로 달라 단순 비교 시 왜곡' 대응.
+    ΔQ 계산 전압 구간의 상단을 잘라 dQ_logvar를 다시 만들고, 셋 A · Linear로 같은 방식(b1 전체 재학습) 평가.
+    피처 정의는 DAY 1에서 고정했으므로 선택에는 쓰지 않는 사후 확인이다."""
+    V = np.linspace(3.5, 2.0, 1000)                         # Qdlin 전압 격자 (3.5 → 2.0V)
+    G = F.set_index('key')
+    rows = []
+    for name, vmax in windows:
+        m = V <= vmax + 1e-9
+        G['w'] = pd.Series({c['key']: np.log10(np.var((c['qdlin'][99] - c['qdlin'][9])[m])) for c in cells})
+        tr, b2, b3 = [G[G.batch == b].reset_index() for b in ('b1', 'b2', 'b3')]
+        gs = tune(tr, ['w'], 'Linear')
+        p3 = gs.predict(b3[['w']])
+        rows.append({'dQ_window': name, **{f'r_{b}': np.corrcoef(d.w, d.log_life)[0, 1] for b, d in (('b1', tr), ('b2', b2), ('b3', b3))},
+                     'train_cv_b1_all': -gs.best_score_, 'test_b2': mape(b2.log_life, gs.predict(b2[['w']])),
+                     'test_b3': mape(b3.log_life, p3), 'bias_b3_pct': np.mean((10 ** p3 - b3.life) / b3.life * 100)})
+    return pd.DataFrame(rows).round(2)
+
+
 def main():
     RESULTS.mkdir(exist_ok=True)
     cells, _ = get_cells()
@@ -198,6 +218,11 @@ def main():
     sens.append(dict(setting='b3 원논문 노이즈 채널 4셀 제거 (b3 40셀)', test_b2=test_b2,
                      test_b3=mape(B3n.log_life, B3n.pred_log)))
     pd.DataFrame(sens).round(2).to_csv(RESULTS / 'sensitivity.csv', index=False, encoding='utf-8-sig')
+
+    # 5-2) Batch 3 경고 대응 : ΔQ 전압 구간 제한 (Qdlin 시작점 왜곡 확인)
+    dqw = dq_window_check(cells, F)
+    dqw.to_csv(RESULTS / 'dq_voltage_window.csv', index=False, encoding='utf-8-sig')
+    print(dqw.to_string(index=False))
 
     # 6) (추가) 배치별 소량 재보정
     cal = pd.concat([offset_calibration(d).assign(batch=b) for b, d in (('b2', B2), ('b3', B3))]).round(2)

@@ -5,6 +5,10 @@
 
 DS Mini Project · 울산 2반 · 김영제, 김지훈
 
+> **결과 요약** : 최종 모델은 `log10(수명) = 1.762 − 0.297 × log10 Var(ΔQ)` (피처 1개, Linear). Test MAPE **Batch 2 28.6%**, **Batch 3 12.8%** (원논문 9.1%).
+> Batch 2 오차는 일반 구조 셀 30개를 **전부 길게 예측한 배치 수준(절편) 차이**이고, ΔQ 신호의 기울기는 세 배치에서 유지된다.
+> 새 배치의 셀 5개로 절편만 보정하면 Batch 2 MAPE는 11.5%로 내려간다 → 현장 적용 시 로트·사이트별 재보정이 필요하다.
+
 ## 프로젝트 개요
 - 데이터셋 : MIT-Stanford Battery Dataset (Severson et al., *Nature Energy* 2019), Kaggle errorcorrect 버전
 - 학습 데이터 : Batch 1 (2017-05-12), 36셀
@@ -36,7 +40,7 @@ DS Mini Project · 울산 2반 · 김영제, 김지훈
 │   ├── model_performance.csv         # 과제 리포팅 포맷 (Batch 3 포함)
 │   ├── model_selection_20seeds.csv   # 피처셋 × 모델 21개 조합의 20 seed 평균 ± 표준편차
 │   ├── residual_by_structure.csv, top_error_cells.csv, test_predictions.csv
-│   └── sensitivity.csv, offset_calibration.csv
+│   └── sensitivity.csv, dq_voltage_window.csv, offset_calibration.csv
 ├── figures/eda/, figures/model/
 ├── reports/                          # DAY 1 모델 전략 PDF
 ├── load_data.py                      # .mat(HDF5) → data/cells_raw.pkl
@@ -54,7 +58,7 @@ pip install -r requirements.txt
 MAT_DIR=<.mat 폴더> python load_data.py   # → data/cells_raw.pkl (기본 ~/Downloads/archive, 1~2분)
 python src/train.py                       # 420회 학습 → results/ 에 성능표와 분석 저장 (약 4분)
 ```
-노트북은 `notebooks/`에서 01 → 02 → 03 순서로 실행한다. `src/train.py`와 노트북은 같은 분할·모델·선택 규칙을 써서 같은 숫자를 낸다 (scikit-learn 1.9.1 기준, `requirements.txt` 고정).
+노트북은 `notebooks/`에서 01 → 02 → 03 순서로 실행한다. `src/train.py`와 노트북은 같은 분할·모델·선택 규칙을 써서 선택 결과와 성능표 숫자가 같다 (scikit-learn 1.9.1 기준, `requirements.txt` 고정). 20 seed 비교표에서 선택되지 않은 SVR·RF 일부 칸은 OS·CPU에 따른 부동소수점 차이로 소수점 둘째 자리가 달라질 수 있다.
 
 ## EDA
 노트북 `notebooks/01_EDA.ipynb` · 장표 `reports/`
@@ -172,6 +176,18 @@ Valid는 모델 선택에 쓰였으므로 일반화 성능은 Test로 판단한�
 - b3 노이즈 채널 4셀을 빼도 b3 결론은 같다
 - GPR 95% 예측 구간은 b2 셀의 41%, b3 셀의 84%만 덮는다. 배치가 바뀌면 모델이 자기 불확실성을 과소평가한다
 
+**Batch 3 경고 "Qdlin 시작점이 배치별로 달라 단순 비교 시 왜곡" 확인** (`results/dq_voltage_window.csv`)
+ΔQ(V)는 배치 간 값을 직접 비교하지 않고 **같은 셀의 cycle 100 − cycle 10 차이**라 셀별 시작점 차이는 상쇄된다. 그래도 시작점이 걸리는 고전압 구간을 잘라 dQ_logvar를 다시 만들어 확인했다 (셋 A · Linear, 같은 방식).
+
+| ΔQ 전압 구간 | r (b1 / b2 / b3) | Train CV (b1 전체) | Test b2 | Test b3 | b3 bias |
+|---|---|---|---|---|---|
+| 2.0~3.5V (기본) | −0.84 / −0.92 / −0.76 | 8.55 | **28.56** | **12.81** | +1.6% |
+| 2.0~3.1V | −0.87 / −0.94 / −0.76 | 7.89 | 32.57 | 15.23 | +8.3% |
+| 2.0~3.0V | −0.88 / −0.95 / −0.74 | 7.43 | 33.34 | 17.74 | +12.5% |
+
+- 구간을 자르면 b1 안에서는 좋아 보이지만 Test b2·b3는 모두 나빠지고 b3 편향이 커진다 → 3.1V 이상 구간은 왜곡보다 **배치를 넘어 유지되는 정보**가 크다. 기본 정의를 유지한다
+- 피처 정의는 DAY 1에서 고정했으므로 이 확인은 선택에 쓰지 않았다. b1 CV만 보고 구간을 골랐다면 Test에서 더 나빠졌을 것이다 (셋 C와 같은 교훈)
+
 ## 오류 분석
 `notebooks/03_modeling.ipynb` 6-2절 · `results/top_error_cells.csv`
 
@@ -186,7 +202,7 @@ Valid는 모델 선택에 쓰였으므로 일반화 성능은 Test로 판단한�
 |---|---|---|
 | b2 일반 셀의 배치 고유 수준 차이 (실험 구조, 로트) | 일반 30셀 100% 과대예측 (평균 +31.9%) | 새 배치 셀 몇 개로 절편 재보정 (아래 ESS 해석), 여러 배치·구조를 섞어 학습 |
 | 학습 수명 범위가 좁음 (534~1,074) | 최대 오차 셀 10/12가 범위 밖 | 장수명·단수명 셀 확보, 외삽 구간은 예측 구간과 함께 제시 |
-| 배치 간 Qdlin 시작점 차이 | b3 3.1V 부근 ΔQ 돌출 (EDA Q3) | ΔQ 계산 전압 구간 제한, 초기 용량으로 정규화한 ΔQ 검토 |
+| 배치 간 Qdlin 시작점 차이 | b3 3.1V 부근 ΔQ 돌출 (EDA Q3) · 전압 구간 제한은 확인 결과 오히려 악화 | 초기 용량으로 정규화한 ΔQ 검토 |
 
 ## ESS 도메인 해석
 - **이 모델을 실제 BESS에 적용한다면 어떤 의사결정에 활용 가능한가?**
@@ -203,7 +219,7 @@ Valid는 모델 선택에 쓰였으므로 일반화 성능은 Test로 판단한�
 - Valid MAPE는 모델 선택에 쓰였으므로 약간 낙관적이다
 - 학습 배치(b1)에 newstructure 셀과 b2·b3 로트가 없어 배치 효과를 학습할 수 없다. 구조·로트 정보는 피처로 쓸 수 없는 조건이다
 - b1 c0~c4의 실제 수명은 이 데이터로 검증할 수 없다
-- b3는 ΔQ 곡선 시작점 왜곡이 있고, 가장 오래 산 2셀은 EOL 미도달로 제외되어 장수 쪽 평가가 불완전하다
+- b3는 ΔQ 곡선 시작점 차이가 있고(전압 구간 제한으로는 개선되지 않음), 가장 오래 산 2셀은 EOL 미도달로 제외되어 장수 쪽 평가가 불완전하다
 - newstructure의 정확한 의미와 b3 Qdlin 돌출의 원인은 데이터로 확정할 수 없는 추정이다
 
 ## 참고문헌
