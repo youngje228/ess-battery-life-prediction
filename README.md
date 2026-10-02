@@ -27,7 +27,7 @@ DS Mini Project · 울산 2반 · 김영제, 김지훈
 ├── notebooks/
 │   ├── 01_EDA.ipynb                  # 정제, EDA Q1~Q5, 피처 테이블
 │   ├── 02_feature_engineering.ipynb  # 피처셋 A/B/C, 정책 단위 분할 20개
-│   └── 03_modeling.ipynb             # 420회 학습, 선택, Test, 잔차·가설·민감도
+│   └── 03_modeling.ipynb             # 420회 학습, 선택, Test, 잔차·가설·민감도·오류 분석
 ├── src/
 │   ├── preprocess.py                 # 셀 로드, 정제 규칙 (제거 사유 로그)
 │   ├── features.py                   # 피처 생성 (cycle 2~100만 사용), 피처셋 A/B/C
@@ -106,7 +106,7 @@ cycle 2~100 측정값만 사용한다. EOL까지의 곡선으로 계산한 값(k
   1. 기준 = (Train CV MAPE + Valid MAPE) / 2의 20 seed 평균
   2. 1위와의 차이가 1위 기준값의 표준편차(0.93)보다 작은 후보 중 피처 수가 적고 단순한 모델
 - **최종 모델** : 셋 A · Linear — `log10(cycle_life) = 1.762 − 0.297 × dQ_logvar`
-- **선택 이유** : 1위(9.23 ± 0.93)이고, 오차 범위 안 후보(셋 A 규제 모델, 셋 B Lasso 9.58) 중에서도 가장 단순하다. 보조 피처 `QD_slope_91_100`의 이득이 분할 변동보다 작다. 선형이라 외삽이 가능하고 계수 하나로 해석이 명확하다 (ΔQ 분산이 10배 커지면 수명 약 0.5배). 딥러닝은 학습 셀 36개로는 데이터가 절대적으로 부족하고, 정비 의사결정에는 피처 단위 설명력이 중요해 쓰지 않았다.
+- **선택 이유** : 1위(9.23 ± 0.93)이고, 1위와의 차이가 0.93 미만인 후보 9개(셋 A의 Linear·Ridge·Lasso·ElasticNet·SVR, 셋 B의 Lasso·ElasticNet·Linear·Ridge) 중에서도 피처 수가 가장 적고 가장 단순하다. 보조 피처 `QD_slope_91_100`의 이득이 분할 변동보다 작다. 선형이라 외삽이 가능하고 계수 하나로 해석이 명확하다 (ΔQ 분산이 10배 커지면 수명 약 0.5배). 딥러닝은 학습 셀 36개로는 데이터가 절대적으로 부족하고, 정비 의사결정에는 피처 단위 설명력이 중요해 쓰지 않았다.
 
 ## 성능 결과
 `results/model_performance.csv` · Gap = 뒤 − 앞 (예: Gap(Train-Valid) = Valid − Train). MAPE는 낮을수록 좋으므로 (+) = 오차 증가
@@ -173,7 +173,7 @@ Valid는 모델 선택에 쓰였으므로 일반화 성능은 Test로 판단한�
 - GPR 95% 예측 구간은 b2 셀의 41%, b3 셀의 84%만 덮는다. 배치가 바뀌면 모델이 자기 불확실성을 과소평가한다
 
 ## 오류 분석
-`results/top_error_cells.csv`
+`notebooks/03_modeling.ipynb` 6-2절 · `results/top_error_cells.csv`
 
 - **모델이 가장 크게 틀린 셀의 공통점**
   - 오차 상위 12셀 중 9셀이 **b2 일반 구조 셀**이고, 그중에서도 수명이 가장 짧은 셀(392~452 cycle)이다. 모두 38~65% **과대예측**
