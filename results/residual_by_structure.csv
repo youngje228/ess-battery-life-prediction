@@ -1,0 +1,4 @@
+group,n,bias_pct,MAPE,over_pred_share
+b2 · newstructure,9,15.7,17.5,88.9
+b2 · normal,30,31.9,31.9,100.0
+b3 · newstructure,44,1.6,12.8,56.8

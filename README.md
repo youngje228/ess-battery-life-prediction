@@ -1,87 +1,156 @@
 # ESS 배터리 수명 예측 (초기 100 사이클 → cycle life)
 
-MIT-Stanford 배터리 데이터(Severson et al., *Nature Energy* 2019)로 **초기 100 사이클 데이터만 보고 셀의 총 수명(EOL까지 사이클 수)을 예측**한다.
+**목적** : ESS는 배터리 교체 비용이 CAPEX의 30~40%를 차지한다. 셀별 교체 시점을 모르면 돌발 정지나 과잉 예방 교체로 비용이 커진다.
+이 프로젝트는 **셀별로, 운영 초기 100 사이클 데이터만으로, EOL(SOH 80%)까지의 총 사이클 수를 예측**해 교체 계획을 미리 세울 수 있는지 검증한다.
+
 DS Mini Project · 울산 2반 · 김영제, 김지훈
+
+## 프로젝트 개요
+- 데이터셋 : MIT-Stanford Battery Dataset (Severson et al., *Nature Energy* 2019), Kaggle errorcorrect 버전
+- 학습 데이터 : Batch 1 (2017-05-12), 36셀
+- 평가 데이터 : Batch 2 (2018-02-20), 39셀 · 추가 검증 Batch 3 (2018-04-12), 44셀
+- 태스크 : **Regression (Cycle Life 예측)**
 
 | 항목 | 내용 |
 |---|---|
-| Task | Regression |
-| Target | `log10(cycle_life)` · cycle_life = 방전 용량 0.88Ah(SOH 80%) 도달 사이클, 예측 후 역변환해 MAPE 계산 |
-| 데이터 분할 | Train / Valid = Batch 1 (정책 단위 분할) · Test = Batch 2 (필수), Batch 3 (추가) |
+| Target | `log10(cycle_life)` · cycle_life = 방전 용량 0.88Ah(공칭 1.1Ah의 80%, SOH 80%) 도달 사이클, 예측 후 역변환해 MAPE 계산 |
+| 데이터 분할 | Train / Valid = Batch 1 (충전 정책 단위 분할) · Test = Batch 2 (필수), Batch 3 (추가) |
 | 지표 | MAPE (%) |
 | 원논문 성능 (Target) | Regression MAPE 9.1% |
+| 최종 모델 | 피처셋 A (`dQ_logvar` 1개) · Linear Regression (StandardScaler → LinearRegression) |
 
-## 1. 성능 요약
+## 파일 구조
+```
+├── data/
+│   ├── README.md                     # 데이터 출처, 배치별 셀 수, 정제 규칙, 파일 설명
+│   └── *.csv, *.json                 # 피처 테이블, 분할, 학습 결과 (cells_raw.pkl은 git 제외)
+├── notebooks/
+│   ├── 01_EDA.ipynb                  # 정제, EDA Q1~Q5, 피처 테이블
+│   ├── 02_feature_engineering.ipynb  # 피처셋 A/B/C, 정책 단위 분할 20개
+│   └── 03_modeling.ipynb             # 420회 학습, 선택, Test, 잔차·가설·민감도
+├── src/
+│   ├── preprocess.py                 # 셀 로드, 정제 규칙 (제거 사유 로그)
+│   ├── features.py                   # 피처 생성 (cycle 2~100만 사용), 피처셋 A/B/C
+│   └── train.py                      # 분할 → 420회 학습 → 선택 → Test → 리포트·오류 분석 (노트북과 같은 결과)
+├── results/
+│   ├── model_performance.csv         # 과제 리포팅 포맷 (Batch 3 포함)
+│   ├── model_selection_20seeds.csv   # 피처셋 × 모델 21개 조합의 20 seed 평균 ± 표준편차
+│   ├── residual_by_structure.csv, top_error_cells.csv, test_predictions.csv
+│   └── sensitivity.csv, offset_calibration.csv
+├── figures/eda/, figures/model/
+├── reports/                          # DAY 1 모델 전략 PDF
+├── load_data.py                      # .mat(HDF5) → data/cells_raw.pkl
+├── requirements.txt
+└── README.md
+```
 
-**최종 모델** : 피처셋 A (`dQ_logvar` 1개) · Linear Regression (StandardScaler → LinearRegression)
+## 환경 설정
+```bash
+git clone https://github.com/youngje228/ess-battery-life-prediction.git
+cd ess-battery-life-prediction
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-| Index | MAPE (%) | 비고 |
-|---|---|---|
-| Train (Batch 1 CV) | **8.83** ± 0.81 | hold-out을 뺀 Batch 1에서 정책 단위 GroupKFold(5), 20 seed 평균 ± 표준편차 (seed 0 : 9.31) |
-| Valid (Batch 1 Hold-out) | **9.63** ± 2.55 | 정책 단위 hold-out 20% (6~8셀), 20 seed 평균 ± 표준편차 (seed 0 : 7.80) |
-| Test (Batch 2) | **28.56** | Batch 1 전체(36셀)로 재학습한 최종 모델 |
-| Gap (Train − Valid) | +0.80 | 과적합 거의 없음 |
-| Gap (Valid − Test) | +18.93 | 배치 간 일반화 실패 (아래 3장) |
-| Gap (Target − Test) | +19.46 | 원논문 9.1% 대비 (아래 3장) |
+MAT_DIR=<.mat 폴더> python load_data.py   # → data/cells_raw.pkl (기본 ~/Downloads/archive, 1~2분)
+python src/train.py                       # 420회 학습 → results/ 에 성능표와 분석 저장 (약 4분)
+```
+노트북은 `notebooks/`에서 01 → 02 → 03 순서로 실행한다. `src/train.py`와 노트북은 같은 분할·모델·선택 규칙을 써서 같은 숫자를 낸다 (scikit-learn 1.9.1 기준, `requirements.txt` 고정).
 
-Gap 부호 : 양수 = 뒤 단계에서 오차 증가. Valid는 모델 선택에 쓰였으므로 일반화 성능은 Test로 판단한다.
+## EDA
+노트북 `notebooks/01_EDA.ipynb` · 장표 `reports/`
 
-**Batch 3 (추가 검증)**
+**데이터 정제** : 46 / 47 / 46 → **36 / 39 / 44셀** (수명이 관측된 셀만 사용). b1 EOL 미도달 10셀, b2 다른 실험 프로토콜 8셀, b3 EOL 미도달 2셀 제거. b1 c0~c4는 원논문이 b2로 이어졌다며 수명을 보정했지만 barcode 대조 결과 이어진 셀이 없어 제외(민감도 분석에만 사용). 자세한 규칙은 `data/README.md`
 
-| Index | MAPE (%) |
-|---|---|
-| Test (Batch 3) | **12.81** |
-| Gap (Batch 2 − Batch 3) | −15.75 (Batch 3가 Batch 2보다 오차가 작다) |
+- **Cycle Life 분포**
+  - 중앙값 b1 772 / b2 472 / b3 1,006. b1은 거의 대칭(skew 0.29), b2·b3는 왼쪽으로 skew됨(긴 꼬리는 오른쪽, skew 1.57 / 1.21) → log10 변환으로 완화
+  - 단명(< 500) b1 0% / b2 71.8% / b3 0%, 장수(> 1000) 13.9% / 7.7% / 52.3%
+  - 핵심 발견 : **같은 충전 정책이어도 newstructure 셀은 수명이 약 2배** (b2 4.8C(80%)-4.8C : 484 → 872). b1은 0%, b3는 100% newstructure → 학습 배치에 없는 셀 유형이 테스트에 있다
+- **열화 곡선 분석**
+  - 장수·단명 셀 모두 초기에는 평탄하다가 Knee point 이후 급가속 (Knee 이전 −61~−104 → 이후 −685~−1,336 µAh/cycle, 약 10배)
+  - Knee point는 수명의 약 75~79% 시점 (b1 579, b2 343, b3 820 cycle)
+  - 핵심 발견 : cycle 10→100 용량 변화는 공칭의 약 0.1%이고 수명과의 상관 부호가 배치마다 뒤집힌다 → **용량 값만으로는 조기 예측 불가**
+- **ΔQ(V) 곡선 분석**
+  - Cycle 100 − Cycle 10 차이 곡선은 2.9~3.0V 부근에서 가장 깊게 파인다 (세 배치 동일)
+  - 단명 셀은 최저점 −36~−66mAh, 장수 셀은 −17~−29mAh로 더 깊고 넓게 파인다
+  - 핵심 발견 : **log Var(ΔQ)와 log 수명의 상관 r = −0.84 / −0.92 / −0.76**, 배치별로 맞춘 기울기가 같다(−0.30, −0.33, −0.31). 단 b2만 절편이 아래로 이동 (같은 ΔQ에서 수명 약 22% 짧음)
+- **충전 속도(C-rate)와 수명의 관계**
+  - b1 : 평균 C-rate와 r = −0.59, 고속충전 상위 25% 평균 수명 736 vs 하위 25% 900. 평균 C-rate와 Knee 이전 열화 속도 r = 0.70
+  - b2·b3 : 정책 19종이 모두 0→80% 평균 4.8C(약 10분 충전)로 설계 → C-rate 분산 없음
+  - 핵심 발견 : 충전 조건 효과는 b1에서만 보이고, **충전시간의 b2 상관(−0.94)은 newstructure로 인한 교란** (일반 셀만 보면 −0.25)
+- **추가 확인**
+  - 셀 barcode : b1은 EL1508004, b2·b3는 EL1508007 로트 → 학습과 테스트는 생산 로트도 다르다
+  - 배치 일관성 : b1에서 |r| > 0.5인 피처 8개 중 4개가 b2에서 부호 반전 → b1만 보고 고른 피처는 테스트에서 실패할 위험
 
-## 2. 무엇을 했나
+## Modeling
 
-### 데이터 정제 (`notebooks/01_EDA.ipynb`)
-- 셀 수 : 46 / 47 / 46 → **36 / 39 / 44** (수명이 관측된 셀만 사용)
-- 제거 : b1 EOL 미도달 10셀, b2 다른 실험 프로토콜(VarCharge, SLOWCYCLE) 8셀, b3 EOL 미도달 2셀
-- b1 c0~c4 : 원논문은 b2로 실험이 이어졌다고 보고 수명을 보정했지만, 이번 데이터 버전의 b2에는 이어진 셀이 없다 (barcode 대조). 검증할 수 없어 학습에서 제외하고 민감도 분석으로만 사용
-- QD 단발 스파이크는 셀 제거 대신 median filter(k=5), IR = 0은 결측 처리
-
-### 피처 (`notebooks/02_feature_engineering.ipynb`)
+### 피처 엔지니어링 전략
 cycle 2~100 측정값만 사용한다. EOL까지의 곡선으로 계산한 값(knee 등)은 미래 정보라 제외했다.
+선택 기준 : ① 세 배치에서 부호 일관 ② 최소 |r| ≥ 0.2 ③ 공선성 그룹(|r| ≥ 0.8)당 대표 1개 ④ 학습 36셀이므로 소수 피처
 
 | 피처셋 | 피처 | 역할 |
 |---|---|---|
 | A | `dQ_logvar` = log10 Var(Q100(V) − Q10(V)) | 원논문 variance 모델 |
-| B | A + `QD_slope_91_100` | DAY 1 기준(배치 간 부호 일관, 최소 \|r\| ≥ 0.2, 공선성 그룹 대표)을 통과한 피처 |
+| B | A + `QD_slope_91_100` | DAY 1 기준 ①~④를 통과한 피처 |
 | C | B + dQ_logmin, dQ_mean, QD_2, QD_slope_2_100, QD_icpt_2_100 | 배치마다 부호가 뒤집히는 피처 포함 · 가설 검증용, 선택 대상에서 사전 제외 |
 
-### 모델 학습과 선택 (`notebooks/03_modeling.ipynb`)
-- 후보 7종 : Linear, Ridge, Lasso, ElasticNet, Gaussian Process, SVR(RBF), RandomForest(depth 2~3)
-- 모든 모델은 `StandardScaler → 모델` Pipeline이라 CV fold마다 학습 fold로만 표준화한다
-- 피처셋 3 × 모델 7 × 분할 20회 = 420회 학습, 하이퍼파라미터는 Train 안에서 정책 단위 GroupKFold(5)로 탐색
+제외 : 충전 정책 변수(avgC_80, C1, Q1, C2 — 테스트 배치에서 상수 또는 부호 반전), 충전시간(교란), IR(부호 반전, b2 결측), 온도(|r| < 0.2), dQ_skew·kurt(부호 반전)
+
+### 모델 선택 및 근거
+- **후보 모델** : Linear, Ridge, Lasso, ElasticNet, Gaussian Process, SVR(RBF), RandomForest(depth 2~3)
+  - 선형 계열 : log Var(ΔQ)–log 수명이 직선 관계(EDA Q3), 테스트가 학습 수명 범위 밖이라 외삽 가능해야 함(Q1)
+  - 규제(Ridge/Lasso/ElasticNet) : 학습 36셀 소표본, 셋 C의 공선성(VIF 550 이상)
+  - GPR : 외삽 구간의 예측 불확실성 / SVR·RF : 비선형 대조군 (트리는 학습 범위 밖 예측 불가)
+- **학습 방식** : 모든 모델은 `StandardScaler → 모델` Pipeline이라 CV fold마다 학습 fold로만 표준화한다. 피처셋 3 × 모델 7 × 분할 20회 = 420회 학습, 하이퍼파라미터는 Train 안에서 정책 단위 GroupKFold(5)로 탐색
+- **데이터 분할** : Valid = Batch 1 내 정책 그룹 단위 hold-out 20% (GroupShuffleSplit, seed 0~19, 6~8셀). 같은 정책 셀이 train과 valid에 나뉘지 않게 해 누수를 막는다
 - **선택 규칙** (Test는 쓰지 않는다)
   1. 기준 = (Train CV MAPE + Valid MAPE) / 2의 20 seed 평균
   2. 1위와의 차이가 1위 기준값의 표준편차(0.93)보다 작은 후보 중 피처 수가 적고 단순한 모델
-  3. 결과 : 1위가 셋 A · Linear(9.23 ± 0.93)이고 오차 범위 안 후보 중에서도 가장 단순하므로 그대로 선택. 셋 B 최고(Lasso 9.58)는 차이가 범위 안이지만 피처가 더 많다
+- **최종 모델** : 셋 A · Linear — `log10(cycle_life) = 1.762 − 0.297 × dQ_logvar`
+- **선택 이유** : 1위(9.23 ± 0.93)이고, 오차 범위 안 후보(셋 A 규제 모델, 셋 B Lasso 9.58) 중에서도 가장 단순하다. 보조 피처 `QD_slope_91_100`의 이득이 분할 변동보다 작다. 선형이라 외삽이 가능하고 계수 하나로 해석이 명확하다 (ΔQ 분산이 10배 커지면 수명 약 0.5배). 딥러닝은 학습 셀 36개로는 데이터가 절대적으로 부족하고, 정비 의사결정에는 피처 단위 설명력이 중요해 쓰지 않았다.
 
-## 3. 결과 해석
+## 성능 결과
+`results/model_performance.csv` · Gap = 뒤 − 앞 (예: Gap(Train-Valid) = Valid − Train). MAPE는 낮을수록 좋으므로 (+) = 오차 증가
 
-### 3-1. Batch 2 오차는 일반 구조 셀의 일괄 과대예측이다
-
-| 그룹 | 셀 | MAPE (%) | 평균 부호 오차 (%) |
+| 구분 | | MAPE (%) | 비고 |
 |---|---|---|---|
-| b2 일반 구조 | 30 | 31.9 | **+31.9** |
-| b2 newstructure | 9 | 17.5 | +15.7 |
-| b3 (전부 newstructure) | 44 | 12.8 | +1.6 |
+| Train (Batch 1 CV) | | **8.83** | 20 seed 평균 ± 0.81 (seed 0 : 9.31) |
+| Valid (Batch 1 Hold-out) | | **9.63** | 20 seed 평균 ± 2.55 (seed 0 : 7.80) |
+| Test (Batch 2) | | **28.56** | Batch 1 전체(36셀)로 재학습한 최종 모델 |
+| | Gap (Train-Valid) | +0.80 | (+) : 과적합 의심 → 과적합 거의 없음 |
+| | Gap (Valid-Test) | +18.93 | (+) : 배치간 일반화 저하 의심 |
+| | Gap (Target-Test) | +19.46 | Target : 원논문 9.1% |
+| Test (Batch 3) | | **12.81** | |
+| | Gap (Batch2-Batch3) | −15.75 | Test 성능 간 비교, Batch 3가 더 잘 맞음 |
+| | Gap (Target-Test) | +3.71 | Batch 3 기준, 원논문 성능 비교 |
 
-- b2 일반 셀은 **30셀 전부**를 실제보다 길게 예측한다 (최소 +8.6%). 무작위 오차가 아니라 **수준(절편) 차이**다
-- DAY 1 EDA에서 이미 본 현상이다 : 배치별로 따로 맞춘 dQ_logvar–수명 직선은 기울기가 같지만(−0.30, −0.33, −0.31) b2만 아래로 이동해 같은 dQ_logvar에서 수명이 약 22% 짧다
+Valid는 모델 선택에 쓰였으므로 일반화 성능은 Test로 판단한다.
+
+### Batch 2 오차는 일반 구조 셀의 일괄 과대예측이다
+
+| 그룹 | 셀 | MAPE (%) | 평균 부호 오차 (%) | 과대예측 비율 |
+|---|---|---|---|---|
+| b2 일반 구조 | 30 | 31.9 | **+31.9** | 100% |
+| b2 newstructure | 9 | 17.5 | +15.7 | 89% |
+| b3 (전부 newstructure) | 44 | 12.8 | +1.6 | 57% |
+
+- b2 일반 셀은 **30셀 전부**를 실제보다 길게 예측한다 (최소 +8.6%). 무작위 오차가 아니라 **수준(절편) 차이**다. 예측과 실제 수명의 상관은 0.92(log)로 높다 → 순위는 맞고 수준이 틀린다
+- DAY 1 EDA에서 이미 본 현상이다 : 배치별로 따로 맞춘 dQ_logvar–수명 직선은 기울기가 같지만 b2만 아래로 이동해 있다
 - 반대로 b3는 bias가 +1.6%로 거의 없다. **ΔQ 신호의 기울기는 배치를 넘어 유지되고, 일반화를 깨는 것은 배치 수준 차이**라는 뜻이다
 
-### 3-2. 원논문 9.1%와의 Gap (+19.46)
+### Gap 해석
+- **Train−Valid (+0.80)** : 과적합 거의 없음. 피처 1개 선형 모델이라 b1 안에서는 안정적이다
+- **Valid−Test (+18.93)** : 배치 간 일반화 실패. 위의 b2 일반 셀 일괄 과대예측이 대부분이다
+- **Target−Test (+19.46)** : 원인은 아래 세 가지
 
 | 원인 | 근거 |
 |---|---|
 | 분할 방식 | 원논문은 b1과 b2를 섞어 번갈아 학습 / 테스트로 나눠 b2의 수준 차이가 학습에 들어갔다. 이번 과제는 배치 단위로 나눈다 |
 | 외삽 | b2 수명의 76.9%가 학습 최소(534) 미만, b2 dQ_logvar의 44%가 학습 범위 밖 |
-| 셀 구성 | 원논문 학습 41 / 1차 테스트 43셀, 이번 36 / 39셀 (b1 c0~c4 제외, b2 데이터 버전 차이) |
+| 셀 구성 | 원논문 학습 41 / 1차 테스트 43셀, 이번 36 / 39셀 (b1 c0~c4 제외, 데이터 버전 차이) |
 
-### 3-3. 셋 C 가설 : 배치마다 뒤집히는 피처는 테스트에서 무너진다
+- **Batch2−Batch3 (−15.75)** : 노션 기준대로 "피처가 특정 배치에 과적합됐는가"를 보면 그렇지 않다. b1 과적합이라면 b2와 b3가 함께 나빠야 하는데 b3는 원논문 수준(+3.71%p)이고 편향도 거의 없다 → b2의 큰 오차는 **b2 고유의 수준 차이** 때문이다
+
+### 셋 C 가설 : 배치마다 뒤집히는 피처는 테스트에서 무너진다
 
 | 피처셋 | 최적 모델 | Batch 1 선택 기준 | Test b2 | Test b3 |
 |---|---|---|---|---|
@@ -89,56 +158,58 @@ cycle 2~100 측정값만 사용한다. EOL까지의 곡선으로 계산한 값(k
 | B | Lasso | 9.58 | 32.07 | 12.40 |
 | C | Linear | **6.40** | **101.96** | 58.40 |
 
-셋 C는 Batch 1 안에서 가장 좋지만 Batch 2에서는 오차가 100%를 넘는다. DAY 1에서 "b1에서 |r| > 0.5인 피처 8개 중 4개가 b2에서 부호 반전"이라고 본 위험이 그대로 나타났고, 셋 C를 선택 대상에서 미리 뺀 규칙이 옳았다.
+셋 C는 Batch 1 안에서 가장 좋지만 Batch 2에서는 오차가 100%를 넘는다. `QD_2`와 `QD_icpt_2_100`(서로 r = 0.998)이 큰 반대 부호 계수를 받았는데, b2에서 이 두 피처가 b1 대비 +1.6~1.9σ 이동해 있다. DAY 1에서 본 위험("b1에서 |r| > 0.5인 피처 8개 중 4개가 b2에서 부호 반전")이 그대로 나타났고, 셋 C를 선택 대상에서 미리 뺀 규칙이 옳았다.
 
-### 3-4. 민감도와 불확실성
+### 민감도와 불확실성 (`results/sensitivity.csv`)
 
-| 학습 데이터 | 셀 | 수명 범위 | Test b2 | Test b3 |
-|---|---|---|---|---|
-| 기본 (c0~c4 제외) | 36 | 534~1,074 | 28.56 | 12.81 |
-| c0~c4 원논문 보정 수명 포함 | 41 | 534~2,237 | 26.17 | 15.26 |
+| 설정 | Test b2 | Test b3 |
+|---|---|---|
+| 기본 (b1 36셀, b3 44셀) | 28.56 | 12.81 |
+| b1 c0~c4 원논문 보정 수명 포함 (b1 41셀, 수명 534~2,237) | 26.17 | 15.26 |
+| b3 원논문 노이즈 채널 4셀 제거 (b3 40셀) | 28.56 | 11.75 |
 
 - 보정 수명을 넣어도 b2는 2.4%p만 좋아진다. b2 오차의 주원인은 학습 수명 범위가 아니라 배치 수준 차이다
+- b3 노이즈 채널 4셀을 빼도 b3 결론은 같다
 - GPR 95% 예측 구간은 b2 셀의 41%, b3 셀의 84%만 덮는다. 배치가 바뀌면 모델이 자기 불확실성을 과소평가한다
 
-### 3-5. ESS 관점
-- 같은 셀 제품이라도 **생산 로트와 운전 구조가 바뀌면 같은 초기 신호에서 수명이 약 20~30% 달라진다.** 한 사이트에서 학습한 모델을 다른 사이트에 그대로 쓰면 교체 시점을 늦게 잡는 쪽(과대예측)으로 틀릴 수 있다
-- 과대예측은 교체 지연 → 돌발 정지와 피크 대응 실패로 이어지는 위험한 방향이다. 운영에서는 새 로트·사이트마다 **소수 셀의 초기 데이터로 절편을 재보정**하는 절차가 필요하다
-- 그래도 ΔQ 신호의 방향과 기울기는 세 배치 모두에서 유지되므로, 같은 로트 안에서의 **상대적 순위(어느 셀이 먼저 교체 대상인가)** 는 신뢰할 수 있다
+## 오류 분석
+`results/top_error_cells.csv`
 
-### 3-6. 한계
+- **모델이 가장 크게 틀린 셀의 공통점**
+  - 오차 상위 12셀 중 9셀이 **b2 일반 구조 셀**이고, 그중에서도 수명이 가장 짧은 셀(392~452 cycle)이다. 모두 38~65% **과대예측**
+  - 상위 12셀 중 10셀은 실제 수명이 **b1 학습 범위(534~1,074) 밖**이다
+  - 이 셀들의 dQ_logvar(−3.3~−3.7)는 b1 범위 안 → 같은 피처 값인데 수명이 더 짧아 모델이 구분할 수 없다
+  - b3에서는 가장 긴 셀(b3c38, 1,935 cycle)이 −42% **과소예측**된다. 오차와 실제 수명의 상관이 b2 −0.56, b3 −0.67 → 짧은 셀은 과대, 긴 셀은 과소 예측 (예측이 학습 범위 쪽으로 끌려간다)
+- **원인 가설 및 개선 방향**
+
+| 원인 가설 | 근거 | 개선 방향 |
+|---|---|---|
+| b2 일반 셀의 배치 고유 수준 차이 (실험 구조, 로트) | 일반 30셀 100% 과대예측, 예측-실제 상관 0.92 | 새 배치 셀 몇 개로 절편 재보정 (아래 ESS 해석), 여러 배치·구조를 섞어 학습 |
+| 학습 수명 범위가 좁음 (534~1,074) | 최대 오차 셀 10/12가 범위 밖 | 장수명·단수명 셀 확보, 외삽 구간은 예측 구간과 함께 제시 |
+| 배치 간 Qdlin 시작점 차이 | b3 3.1V 부근 ΔQ 돌출 (EDA Q3) | ΔQ 계산 전압 구간 제한, 초기 용량으로 정규화한 ΔQ 검토 |
+
+## ESS 도메인 해석
+- **이 모델을 실제 BESS에 적용한다면 어떤 의사결정에 활용 가능한가?**
+  - **교체 우선순위(셀·모듈 스크리닝)** : ΔQ 신호의 방향과 기울기는 세 배치 모두에서 유지되고, 예측과 실제의 순위 상관도 유지된다(Spearman b2 0.71, b3 0.80). 운영 100 사이클(수명의 5~26%) 시점에 "어느 셀이 먼저 교체 대상인가"를 정해 예비품과 정비 일정을 배정할 수 있다
+  - **교체 시점·예산 계획** : 같은 로트 안(Valid 9.6%)이나 재보정 후(아래)에는 교체 예산과 피크 대응 용량 계획에 쓸 수 있는 수준이다
+  - **조기 이상 탐지** : 용량(SOH) 모니터링은 Knee point 직전까지 이상을 보여주지 못하지만 ΔQ(V)는 100 사이클에 이미 차이를 보인다
+- **어떤 한계가 있으며, 실 배포를 위해 추가로 필요한 것은 무엇인가?**
+  - 같은 셀 제품이라도 **생산 로트와 운전 구조가 바뀌면 같은 초기 신호에서 수명이 약 20~30% 달라진다.** 한 사이트에서 학습한 모델을 그대로 쓰면 교체 시점을 늦게 잡는 쪽(과대예측)으로 틀린다. 과대예측은 교체 지연 → 돌발 정지와 피크 대응 실패로 이어지는 위험한 방향이다
+  - **새 로트·사이트마다 소수 셀로 절편 재보정**하는 절차가 필요하다. 추가 분석(`results/offset_calibration.csv`) : 테스트 배치에서 수명이 확인된 셀 k개로 절편만 보정하면 나머지 셀의 MAPE가 b2 28.6% → **11.5%(k=5) → 10.9%(k=10)**. b3는 원래 편향이 거의 없어 개선되지 않는다(k=10에서 13.6%). 테스트 수명 일부를 쓰는 운영 시나리오라 위 성능표와 분리해서 보고한다
+  - 그 밖에 필요한 것 : 여러 로트·운전 조건을 포함한 학습 데이터, 실 운전에서 ΔQ(V)를 얻기 위한 주기적 기준 방전(진단 사이클), 예측 구간을 함께 제시한 보수적 교체 판단. 이번 데이터는 실험실 조건(정전류 방전, 온도 챔버)이라 실제 ESS의 부분 충방전·온도 변동과 다르다
+
+## 한계
 - 학습 셀이 36개, 정책 20개뿐이라 Valid(6~8셀)의 분산이 크다 (Valid MAPE 표준편차 2.55)
 - Valid MAPE는 모델 선택에 쓰였으므로 약간 낙관적이다
 - 학습 배치(b1)에 newstructure 셀과 b2·b3 로트가 없어 배치 효과를 학습할 수 없다. 구조·로트 정보는 피처로 쓸 수 없는 조건이다
 - b1 c0~c4의 실제 수명은 이 데이터로 검증할 수 없다
 - b3는 ΔQ 곡선 시작점 왜곡이 있고, 가장 오래 산 2셀은 EOL 미도달로 제외되어 장수 쪽 평가가 불완전하다
-
-## 4. 실행 방법
-
-```bash
-git clone https://github.com/youngje228/ess-battery-life-prediction.git
-cd ess-battery-life-prediction
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-MAT_DIR=<.mat 폴더> python load_data.py      # → data/cells_raw.pkl (기본 ~/Downloads/archive)
-```
-그다음 `notebooks/`의 노트북을 01 → 02 → 03 순서로 실행한다 (작업 폴더 = `notebooks/`).
-
-원본 데이터 : `2017-05-12`, `2018-02-20`, `2018-04-12_batchdata_updated_struct_errorcorrect.mat`
-
-## 5. 폴더 구조
-
-```
-├── load_data.py                    # .mat(HDF5) → data/cells_raw.pkl
-├── notebooks/
-│   ├── 01_EDA.ipynb                # 정제, EDA Q1~Q5, 피처 테이블
-│   ├── 02_feature_engineering.ipynb  # 피처셋 A/B/C, 정책 단위 분할 20개
-│   └── 03_modeling.ipynb           # 420회 학습, 선택, Test, 잔차·가설·민감도
-├── data/                           # features_cycle100.csv, model_input.csv, splits.json,
-│                                   # model_runs_20seeds.csv, model_report.json, test_predictions.csv
-├── figures/eda/, figures/model/
-└── reports/                        # DAY 1 모델 전략 PDF
-```
+- newstructure의 정확한 의미와 b3 Qdlin 돌출의 원인은 데이터로 확정할 수 없는 추정이다
 
 ## 참고문헌
-Severson, K. A. et al. Data-driven prediction of battery cycle life before capacity degradation. *Nature Energy* 4, 383–391 (2019)
+- Severson et al. (2019). Data-driven prediction of battery cycle life before capacity degradation. *Nature Energy*, 4, 383–391.
+- Attia et al. (2020). Closed-loop optimization of fast-charging protocols for batteries with machine learning. *Nature*, 578, 397–402. (Batch 2·3의 10분 충전 정책 설계)
+
+## 팀 구성
+- 김영제 : (역할 작성)
+- 김지훈 : (역할 작성)
