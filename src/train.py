@@ -166,7 +166,7 @@ def paper_split_check(F, n_random=50, seed=0):
     원논문 학습·1차 테스트는 2017-05-12 + 2017-06-30 배치를 섞어 '각각 수명 범위를 고르게 덮도록' 나눴다.
     여기서는 b1 + b2(36 + 39셀)를 수명 순으로 정렬해 번갈아 배정(2가지) + 무작위 41셀 학습(50회)으로 재현한다.
     셋 A · Linear(원논문 variance 모델과 같은 형태). 과제 성능표와 분리해서 보고한다."""
-    P = F[F.batch.isin(['b1', 'b2'])].sort_values('life').reset_index(drop=True)
+    P = F[F.batch.isin(['b1', 'b2'])].sort_values(['life', 'key'], kind='mergesort').reset_index(drop=True)   # 동점 수명은 key로 고정
     B3 = F[F.batch == 'b3']; feats = FEATURE_SETS['A']; rows = []
     def ev(tr, te, name):
         m = tune(tr.reset_index(drop=True), feats, 'Linear')
