@@ -22,6 +22,8 @@ MIT-Stanford Battery Dataset (Severson et al., *Nature Energy* 2019) — Kaggle 
 | `model_input.csv`, `feature_sets.json`, `splits.json` | 02_feature_engineering | 모델 입력, 피처셋 A/B/C, 정책 단위 분할 20개 |
 | `model_runs_20seeds.csv`, `model_report.json`, `test_predictions.csv` | 03_modeling | 420회 학습 결과, 최종 리포트, 테스트 예측 |
 
+`data/test_predictions.csv`(노트북 03 출력)와 `results/test_predictions.csv`(`src/train.py` 출력)는 같은 모델의 같은 예측이다 (반올림 자리만 다름). 성능 리포트의 기준 파일은 `results/`다.
+
 ## 정제 규칙
 - 인덱스 : summary·Qdlin 배열 j = cycle − 1 (cycle 10 = j9, cycle 100 = j99)
 - 제거 : 다른 실험 프로토콜(b2 VarCharge 4, SLOWCYCLE 4), EOL(0.88Ah) 미도달 = 수명 미관측(b1 10, b3 2)

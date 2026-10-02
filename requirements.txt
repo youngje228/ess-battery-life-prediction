@@ -5,3 +5,4 @@ matplotlib==3.11.2
 h5py==3.16.0
 ipykernel==7.4.0
 scikit-learn==1.9.1
+jupyter==1.1.1

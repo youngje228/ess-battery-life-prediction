@@ -20,8 +20,8 @@
   },
   "Test (b2)": {
    "MAPE % (20 seed 평균)": 28.56,
-   "표준편차": NaN,
-   "seed 0": NaN
+   "표준편차": null,
+   "seed 0": null
   }
  },
  "gap": {
